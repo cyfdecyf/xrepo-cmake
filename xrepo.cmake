@@ -8,48 +8,6 @@ set(XREPO_ARCH "" CACHE STRING "Xrepo package architecture")
 set(XREPO_TOOLCHAIN "" CACHE STRING "Xrepo package toolchain")
 set(XREPO_XMAKEFILE "" CACHE STRING "Xmake script file of Xrepo package")
 
-# xrepo_package:
-#
-# Parameters:
-#      package_spec: required
-#          The package name and version recognized by xrepo.
-#      CONFIGS: optional
-#          Run `xrepo info <package>` to see what configs are available.
-#      MODE: optional, debug|release
-#          If not specified: mode is set to "debug" only when $CMAKE_BUILD_TYPE
-#          is Debug. Otherwise mode is `release`.
-#      OUTPUT: optional, verbose|diagnosis|quiet
-#          Control output for xrepo install command.
-#      DIRECTORY_SCOPE: optional
-#          If specified, setup include and link directories for the package in
-#          CMake directory scope. CMake code in `add_subdirectory` can also use
-#          the package directly.
-#
-# Example:
-#
-#      xrepo_package(
-#          "foo 1.2.3"
-#          [CONFIGS feature1=true,feature2=false]
-#          [MODE debug|release]
-#          [OUTPUT verbose|diagnosis|quiet]
-#          [DIRECTORY_SCOPE]
-#      )
-#
-# `xrepo_package` does the following tasks for the above call:
-#
-# 1. Ensure specified package `foo` version 1.2.3 with given config is installed.
-# 2. Set variable `foo_INCLUDE_DIR` and `foo_LINK_DIR` to header and library
-#     path.
-#     -    Use these variables in `target_include_directories` and
-#       `target_link_directories` to use the package.
-#     - User should figure out what library to use for `target_link_libraries`.
-#     - If `DIRECTORY_SCOPE` is specified, execute following code so the package
-#       can be used in cmake's direcotry scope:
-#           include_directories(foo_INCLUDE_DIR)
-#           link_directories(foo_LINK_DIR)
-# 3. If package provides cmake modules under `${foo_LINK_DIR}/cmake/foo`,
-#     set `foo_DIR` to the module directory so that `find_package(foo)`
-#     can be used.
 function(_install_xmake_program)
     set(XMAKE_BINARY_DIR ${CMAKE_BINARY_DIR}/xmake)
     message(STATUS "xmake not found, Install it to ${XMAKE_BINARY_DIR} automatically!")
@@ -182,6 +140,48 @@ if(NOT XREPO_PACKAGE_DISABLE)
     message(STATUS "xrepo fetch --json: ${XREPO_FETCH_JSON}")
 endif()
 
+# xrepo_package:
+#
+# Parameters:
+#      package_spec: required
+#          The package name and version recognized by xrepo.
+#      CONFIGS: optional
+#          Run `xrepo info <package>` to see what configs are available.
+#      MODE: optional, debug|release
+#          If not specified: mode is set to "debug" only when $CMAKE_BUILD_TYPE
+#          is Debug. Otherwise mode is `release`.
+#      OUTPUT: optional, verbose|diagnosis|quiet
+#          Control output for xrepo install command.
+#      DIRECTORY_SCOPE: optional
+#          If specified, setup include and link directories for the package in
+#          CMake directory scope. CMake code in `add_subdirectory` can also use
+#          the package directly.
+#
+# Example:
+#
+#      xrepo_package(
+#          "foo 1.2.3"
+#          [CONFIGS feature1=true,feature2=false]
+#          [MODE debug|release]
+#          [OUTPUT verbose|diagnosis|quiet]
+#          [DIRECTORY_SCOPE]
+#      )
+#
+# `xrepo_package` does the following tasks for the above call:
+#
+# 1. Ensure specified package `foo` version 1.2.3 with given config is installed.
+# 2. Set variable `foo_INCLUDE_DIR` and `foo_LINK_DIR` to header and library
+#     path.
+#     -    Use these variables in `target_include_directories` and
+#       `target_link_directories` to use the package.
+#     - User should figure out what library to use for `target_link_libraries`.
+#     - If `DIRECTORY_SCOPE` is specified, execute following code so the package
+#       can be used in cmake's direcotry scope:
+#           include_directories(foo_INCLUDE_DIR)
+#           link_directories(foo_LINK_DIR)
+# 3. If package provides cmake modules under `${foo_LINK_DIR}/cmake/foo`,
+#     set `foo_DIR` to the module directory so that `find_package(foo)`
+#     can be used.
 function(xrepo_package package)
     if(XREPO_PACKAGE_DISABLE)
         return()
