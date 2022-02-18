@@ -1,3 +1,9 @@
+# The main function provided in this file:
+#
+# - `xrepo_package`: Install and setup cmake variables for packages.
+#
+# Please refer to function comments and project README for usage.
+
 option(XREPO_PACKAGE_DISABLE "Disable Xrepo Packages" OFF)
 option(XREPO_PACKAGE_VERBOSE "Enable verbose output for Xrepo Packages" OFF)
 option(XREPO_BOOTSTRAP_XMAKE "Bootstrap Xmake automatically" ON)
@@ -145,8 +151,10 @@ endif()
 # Parameters:
 #      package_spec: required
 #          The package name and version recognized by xrepo.
+#          Or path to xmake lua script that specifies package requirements.
 #      CONFIGS: optional
 #          Run `xrepo info <package>` to see what configs are available.
+#          Ignored if package_spec is a lua script.
 #      MODE: optional, debug|release
 #          If not specified: mode is set to "debug" only when $CMAKE_BUILD_TYPE
 #          is Debug. Otherwise mode is `release`.
@@ -191,11 +199,37 @@ function(xrepo_package package)
     set(one_value_args CONFIGS MODE OUTPUT ALIAS)
     cmake_parse_arguments(ARG "${options}" "${one_value_args}" "" ${ARGN})
 
+    # If package refers to an actual file.
+    set(_is_pkgspec_from_file OFF)
+    if("${pacakge}" MATCHES "\.lua$")
+        set(_is_pkgspec_from_file ON)
+        # Check whether ${pacakge} is absolute path on Linux or Windows.
+        if(NOT (("${pacakge}" MATCHES "^/.*") OR ("${package}" MATCHES "^[a-zA-Z]:\\.*")))
+            # For relative path, prepend current CMakeLists.txt dir to form absolute path.
+            # This is required to make if(EXISTS "path") to work.
+            set(package "${CMAKE_CURRENT_LIST_DIR}/${package}")
+        endif()
+        if(NOT EXISTS "${package}")
+            message(FATAL_ERROR "xrepo: ${_is_pkgspec_from_file} does not exists")
+        endif()
+    endif()
+
+    if(_is_pkgspec_from_file AND NOT XREPO_FETCH_JSON)
+        message(FATAL_ERROR "xrepo: packages spec from file requires CMake 3.19 and above")
+    endif()
+
     # Construct options to xrepo install and fetch command.
-    if(DEFINED ARG_CONFIGS)
-        set(configs "--configs=${ARG_CONFIGS}")
+
+    if(_is_pkgspec_from_file)
+        if(DEFINED ARG_CONFIGS)
+            message(WARNING "xrepo: install from lua file, ignoring CONFIGS")
+        endif()
     else()
-        set(configs "")
+        if(DEFINED ARG_CONFIGS)
+            set(configs "--configs=${ARG_CONFIGS}")
+        else()
+            set(configs "")
+        endif()
     endif()
 
     if(DEFINED ARG_MODE)
@@ -210,6 +244,7 @@ function(xrepo_package package)
         endif()
     endif()
 
+    # Options to control output.
     if(XREPO_PACKAGE_VERBOSE)
         set(verbose "-vD")
     elseif(DEFINED ARG_OUTPUT)
@@ -241,16 +276,21 @@ function(xrepo_package package)
         set(includes "--includes=${XREPO_XMAKEFILE}")
     endif()
 
+    # Verbose option should not be passed to xrepo fetch.
+    # Otherwise, the output would be invalid to parse.
+    set(_xrepo_cmdargs ${platform} ${arch} ${toolchain} ${includes} ${mode} ${configs} ${package})
+
+    if(_is_pkgspec_from_file)
+        _xrepo_package_from_file()
+        return()
+    endif()
+
     # Get package_name that will be used as various variables' prefix.
     if(DEFINED ARG_ALIAS)
         _xrepo_package_name(${ARG_ALIAS})
     else()
         _xrepo_package_name(${package})
     endif()
-
-    # Verbose option should not be passed to xrepo fetch.
-    # Otherwise, the output would be invalid to parse.
-    set(_xrepo_cmdargs ${platform} ${arch} ${toolchain} ${includes} ${mode} ${configs} ${package})
 
     # To speedup cmake re-configure, if xrepo command and args are the same as
     # cached value, load related variables from cache to avoid executing xrepo
@@ -270,12 +310,7 @@ function(xrepo_package package)
         return()
     endif()
 
-    message(STATUS "xrepo install ${_xrepo_cmdargs_${package_name}}")
-    execute_process(COMMAND ${CMAKE_COMMAND} -E env --unset=CC --unset=CXX --unset=LD ${XREPO_CMD} install --yes ${verbose} ${_xrepo_cmdargs}
-                    RESULT_VARIABLE exit_code)
-    if(NOT "${exit_code}" STREQUAL "0")
-        message(FATAL_ERROR "xrepo install failed, exit code: ${exit_code}")
-    endif()
+    _xrepo_install()
 
     if(XREPO_FETCH_JSON)
         _xrepo_fetch_json()
@@ -290,6 +325,23 @@ function(xrepo_package package)
     # Store xrepo command and arguments for furture comparison.
     set(_cache_xrepo_cmdargs_${package_name} "${_xrepo_cmdargs_${package_name}}" CACHE INTERNAL "")
 endfunction()
+
+macro(_xrepo_install)
+    message(STATUS "xrepo install ${_xrepo_cmdargs_${package_name}}")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E env --unset=CC --unset=CXX --unset=LD ${XREPO_CMD} install --yes ${verbose} ${_xrepo_cmdargs}
+                    RESULT_VARIABLE exit_code)
+    if(NOT "${exit_code}" STREQUAL "0")
+        message(FATAL_ERROR "xrepo install failed, exit code: ${exit_code}")
+    endif()
+endmacro()
+
+macro(_xrepo_package_from_file)
+    _xrepo_install()
+    # TODO this is not finished. This [PR](https://github.com/xmake-io/xmake/pull/2096) tries to add name for xrepo fetch output,
+    # but ruki suggested to install only one package in a single lua file.
+    # So I stop working on this implementation for now.
+    _xrepo_fetch_json()
+endmacro()
 
 function(xrepo_target_packages target)
     if(XREPO_PACKAGE_DISABLE)
