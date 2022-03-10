@@ -24,6 +24,7 @@ xrepo_package("gflags 2.2.2"
 xrepo_package("glog"
     # xrepo_package("gflags") would be unnecessary if we use DEPS to include dependent libraries.
     #DEPS
+    OUTPUT diagnosis
     CONFIGS "packages/glog.lua")
 
 # find_pacakge works because package install dir is added to CMAKE_PREFIX_PATH.
